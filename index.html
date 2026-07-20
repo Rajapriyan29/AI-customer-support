@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupportBot - AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .chat-container {
+            height: calc(100vh - 140px);
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            margin-bottom: 12px;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            border-bottom-right-radius: 4px;
+            margin-left: auto;
+        }
+        .bot-message {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            border-bottom-left-radius: 4px;
+        }
+        .typing {
+            display: flex;
+            gap: 4px;
+        }
+        .typing-dot {
+            height: 6px;
+            width: 6px;
+            background-color: #9ca3af;
+            border-radius: 50%;
+            animation: typingBounce 1.2s infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto h-screen flex flex-col">
+        <!-- Header -->
+        <div class="bg-white shadow-sm border-b p-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl">
+                    🤖
+                </div>
+                <div>
+                    <h1 class="text-xl font-semibold text-gray-900">SupportBot</h1>
+                    <p class="text-sm text-green-600 flex items-center gap-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        Online • Powered by Gemini
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 text-sm">
+                <button onclick="clearChat()" 
+                        class="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition">
+                    <i class="fa-solid fa-trash"></i>
+                    Clear Chat
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div id="chat-container" class="chat-container overflow-y-auto p-6 bg-gray-50 flex flex-col">
+            <!-- Messages will be appended here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="bg-white border-t p-4">
+            <div class="max-w-3xl mx-auto">
+                <form id="chat-form" class="flex gap-3">
+                    <input 
+                        type="text" 
+                        id="user-input"
+                        class="flex-1 px-6 py-4 bg-gray-100 border border-gray-200 focus:border-blue-500 focus:outline-none rounded-3xl text-lg placeholder-gray-400"
+                        placeholder="Type your question here... (e.g., What is the return policy?)"
+                        autocomplete="off">
+                    <button 
+                        type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-3xl flex items-center justify-center transition shadow-sm">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+                <p class="text-center text-xs text-gray-400 mt-3">
+                    Answers based on company knowledge base • Conversation context maintained
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let conversationHistory = [];
+
+        function addMessage(content, isUser) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+            
+            messageDiv.innerHTML = `
+                <div class="${isUser ? 'user-message' : 'bot-message'} message">
+                    ${content}
+                </div>
+            `;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const chatContainer = document.getElementById('chat-container');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typing-indicator';
+            typingDiv.className = 'flex justify-start';
+            typingDiv.innerHTML = `
+                <div class="bot-message message typing">
+                    <div class="typing flex">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(typingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return typingDiv;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, true);
+            conversationHistory.push({ role: "user", content: message });
+            
+            // Clear input
+            input.value = '';
+
+            // Show typing
+            const typingIndicator = showTypingIndicator();
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        history: conversationHistory
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Remove typing indicator
+                typingIndicator.remove();
+
+                if (data.error) {
+                    addMessage(`<span class="text-red-500">Error: ${data.error}</span>`, false);
+                } else {
+                    addMessage(data.response, false);
+                    conversationHistory.push({ role: "assistant", content: data.response });
+                }
+            } catch (error) {
+                typingIndicator.remove();
+                addMessage(`<span class="text-red-500">Sorry, I couldn't connect to the server.</span>`, false);
+            }
+        }
+
+        function clearChat() {
+            if (confirm("Clear the entire conversation?")) {
+                document.getElementById('chat-container').innerHTML = '';
+                conversationHistory = [];
+                
+                // Add welcome message again
+                setTimeout(() => {
+                    addMessage(`👋 Hi! I'm your AI Customer Support Assistant.<br><br>I can help you with FAQs, policies, returns, shipping, and more.<br><br><strong>Ask me anything!</strong>`, false);
+                }, 300);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Welcome message
+            addMessage(`👋 Hi! I'm your AI Customer Support Assistant.<br><br>I can help you with FAQs, policies, returns, shipping, and more.<br><br><strong>Ask me anything!</strong>`, false);
+            
+            // Form submit
+            document.getElementById('chat-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                sendMessage();
+            });
+
+            // Allow sending with Enter (but Shift+Enter for new line)
+            document.getElementById('user-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
